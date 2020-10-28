@@ -249,8 +249,10 @@ class ReorderableSliverList extends StatefulWidget {
     this.onNoReorder,
     this.onReorderStarted,
     this.enabled = true,
-  }): assert(onReorder != null && delegate != null),
-      super(key: key);
+    this.needsLongPressDraggable = true,
+  })  : assert(onReorder != null && delegate != null),
+        super(key: key);
+
   /// The delegate that provides the children for this widget.
   ///
   /// The children are constructed lazily using this widget to avoid creating
@@ -277,14 +279,14 @@ class ReorderableSliverList extends StatefulWidget {
   /// Sets whether the children are reorderable or not
   final bool enabled;
 
+  final bool needsLongPressDraggable;
+
   @override
   _ReorderableSliverListState createState() => _ReorderableSliverListState();
 }
 
 class _ReorderableSliverListState extends State<ReorderableSliverList>
-  with TickerProviderStateMixin<ReorderableSliverList>, ReorderableMixin
-{
-
+    with TickerProviderStateMixin<ReorderableSliverList>, ReorderableMixin {
   // The extent along the [widget.scrollDirection] axis to allow a child to
   // drop into when the user reorders list children.
   //
@@ -724,11 +726,21 @@ class _ReorderableSliverListState extends State<ReorderableSliverList>
     }
 
     Widget _makeAppearingWidget(Widget child) {
-      return makeAppearingWidget(child, _entranceController, _draggingFeedbackSize, Axis.vertical,);
+      return makeAppearingWidget(
+        child,
+        _entranceController,
+        _draggingFeedbackSize,
+        Axis.vertical,
+      );
     }
 
     Widget _makeDisappearingWidget(Widget child) {
-      return makeDisappearingWidget(child, _ghostController, _draggingFeedbackSize, Axis.vertical,);
+      return makeDisappearingWidget(
+        child,
+        _ghostController,
+        _draggingFeedbackSize,
+        Axis.vertical,
+      );
     }
 
     Widget buildDragTarget(BuildContext context, List<int> acceptedCandidates,
@@ -756,13 +768,14 @@ class _ReorderableSliverListState extends State<ReorderableSliverList>
       } else {
         // We build the draggable inside of a layout builder so that we can
         // constrain the size of the feedback dragging widget.
-        child = LongPressDraggable<int>(
-          maxSimultaneousDrags: widget.enabled?1:0,
-          axis: Axis.vertical,
-          //widget.direction,
-          data: index,
-          //toWrap.key,
-          ignoringFeedbackSemantics: false,
+        child = widget.needsLongPressDraggable
+            ? LongPressDraggable<int>(
+                maxSimultaneousDrags: widget.enabled ? 1 : 0,
+                axis: Axis.vertical,
+                //widget.direction,
+                data: index,
+                //toWrap.key,
+                ignoringFeedbackSemantics: false,
 //        feedback: Container(
 //          alignment: Alignment.topLeft,
 //          // These constraints will limit the cross axis of the drawn widget.
@@ -772,7 +785,7 @@ class _ReorderableSliverListState extends State<ReorderableSliverList>
 //            child: IntrinsicWidth(child: toWrapWithSemantics),
 //          ),
 //        ),
-          feedback: feedbackBuilder,
+                feedback: feedbackBuilder,
 //        feedback: Transform(
 //          transform: new Matrix4.rotationZ(0),
 //          alignment: FractionalOffset.topLeft,
@@ -784,36 +797,92 @@ class _ReorderableSliverListState extends State<ReorderableSliverList>
 //          ),
 //        ),
 
-          // Wrap toWrapWithSemantics with a widget that supports HitTestBehavior
-          // to make sure the whole toWrapWithSemantics responds to pointer events, i.e. dragging
-          child: MetaData(
-              child: toWrapWithSemantics, behavior: HitTestBehavior.opaque),
-          //toWrapWithSemantics,//_dragging == toWrap.key ? const SizedBox() : toWrapWithSemantics,
-          childWhenDragging: IgnorePointer(
-            ignoring: true,
-            child: SizedBox(
-              // Small values (<50) cause an error when used with ListTile.
-              width: double.infinity,
-              child: Opacity(
-                  opacity: 0,
+                // Wrap toWrapWithSemantics with a widget that supports HitTestBehavior
+                // to make sure the whole toWrapWithSemantics responds to pointer events, i.e. dragging
+                child: MetaData(
+                    child: toWrapWithSemantics,
+                    behavior: HitTestBehavior.opaque),
+                //toWrapWithSemantics,//_dragging == toWrap.key ? const SizedBox() : toWrapWithSemantics,
+                childWhenDragging: IgnorePointer(
+                    ignoring: true,
+                    child: SizedBox(
+                        // Small values (<50) cause an error when used with ListTile.
+                        width: double.infinity,
+                        child: Opacity(
+                            opacity: 0,
 //              child: _makeAppearingWidget(toWrap)
-                  child: Container(width: 0, height: 0, child: toWrap)
+                            child: Container(
+                                width: 0, height: 0, child: toWrap)))),
+                //ConstrainedBox(constraints: contentConstraints),//SizedBox(),
+                dragAnchor: DragAnchor.child,
+                onDragStarted: onDragStarted,
+                // When the drag ends inside a DragTarget widget, the drag
+                // succeeds, and we reorder the widget into position appropriately.
+                onDragCompleted: onDragEnded,
+                // When the drag does not end inside a DragTarget widget, the
+                // drag fails, but we still reorder the widget to the last position it
+                // had been dragged to.
+                onDraggableCanceled: (Velocity velocity, Offset offset) {
+                  onDragEnded();
+                },
               )
-            )
-          ),
-          //ConstrainedBox(constraints: contentConstraints),//SizedBox(),
-          dragAnchor: DragAnchor.child,
-          onDragStarted: onDragStarted,
-          // When the drag ends inside a DragTarget widget, the drag
-          // succeeds, and we reorder the widget into position appropriately.
-          onDragCompleted: onDragEnded,
-          // When the drag does not end inside a DragTarget widget, the
-          // drag fails, but we still reorder the widget to the last position it
-          // had been dragged to.
-          onDraggableCanceled: (Velocity velocity, Offset offset) {
-            onDragEnded();
-          },
-        );
+            : Draggable<int>(
+                maxSimultaneousDrags: widget.enabled ? 1 : 0,
+                axis: Axis.vertical,
+                //widget.direction,
+                data: index,
+                //toWrap.key,
+                ignoringFeedbackSemantics: false,
+//        feedback: Container(
+//          alignment: Alignment.topLeft,
+//          // These constraints will limit the cross axis of the drawn widget.
+//          constraints: constraints,
+//          child: Material(
+//            elevation: 6.0,
+//            child: IntrinsicWidth(child: toWrapWithSemantics),
+//          ),
+//        ),
+                feedback: feedbackBuilder,
+//        feedback: Transform(
+//          transform: new Matrix4.rotationZ(0),
+//          alignment: FractionalOffset.topLeft,
+//          child: Material(
+//            child: Card(child: ConstrainedBox(constraints: BoxConstraints.tightFor(width: 100), child: toWrapWithSemantics)),
+//            elevation: 6.0,
+//            color: Colors.transparent,
+//            borderRadius: BorderRadius.zero,
+//          ),
+//        ),
+
+                // Wrap toWrapWithSemantics with a widget that supports HitTestBehavior
+                // to make sure the whole toWrapWithSemantics responds to pointer events, i.e. dragging
+                child: MetaData(
+                    child: toWrapWithSemantics,
+                    behavior: HitTestBehavior.opaque),
+                //toWrapWithSemantics,//_dragging == toWrap.key ? const SizedBox() : toWrapWithSemantics,
+                childWhenDragging: IgnorePointer(
+                    ignoring: true,
+                    child: SizedBox(
+                        // Small values (<50) cause an error when used with ListTile.
+                        width: double.infinity,
+                        child: Opacity(
+                            opacity: 0,
+//              child: _makeAppearingWidget(toWrap)
+                            child: Container(
+                                width: 0, height: 0, child: toWrap)))),
+                //ConstrainedBox(constraints: contentConstraints),//SizedBox(),
+                dragAnchor: DragAnchor.child,
+                onDragStarted: onDragStarted,
+                // When the drag ends inside a DragTarget widget, the drag
+                // succeeds, and we reorder the widget into position appropriately.
+                onDragCompleted: onDragEnded,
+                // When the drag does not end inside a DragTarget widget, the
+                // drag fails, but we still reorder the widget to the last position it
+                // had been dragged to.
+                onDraggableCanceled: (Velocity velocity, Offset offset) {
+                  onDragEnded();
+                },
+              );
       }
 
       // The target for dropping at the end of the list doesn't need to be
